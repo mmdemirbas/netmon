@@ -1,0 +1,11 @@
+# App specific
+/bin
+/data
+/log
+
+# Go
+/vendor
+/go.sum
+
+# Editors
+/.idea
