@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// FIXME: This is not working in MacOS! Fix it.
+// FIXME: This is not working in MacOS! Others are not tested yet! Fix it. Use a library.
 
 func getNetworkName() (string, error) {
 	if runtime.GOOS == "darwin" { // macOS

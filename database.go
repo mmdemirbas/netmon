@@ -1,79 +1,139 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"github.com/showwin/speedtest-go/speedtest"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
-const (
-	dataFileName = "data/metrics.json"
-)
+var dbConnection *sql.DB // Global database connection
 
-type ConnectionMetrics struct {
-	Timestamp            time.Time         `json:"timestamp"`
-	NetworkName          string            `json:"network_name"`
-	Online               bool              `json:"online"`
-	PingNanos            time.Duration     `json:"ping"`
-	JitterNanos          time.Duration     `json:"jitter"`
-	PacketLossPercentage float64           `json:"packet_loss"`
-	DownloadMbps         float64           `json:"download"`
-	UploadMbps           float64           `json:"upload"`
-	Server               *speedtest.Server `json:"server"`
+type Metrics struct {
+	Timestamp   time.Time
+	NetworkName string
+	Online      bool
+	Data        *speedtest.Server
 }
 
-func saveMetric(metrics *ConnectionMetrics) error {
+func initDatabase(absoluteDbFilePath string) error {
 	// Create parent directories if they don't exist
-	dataDirName := filepath.Dir(dataFileName)
-	if err := os.MkdirAll(dataDirName, 0755); err != nil {
-		log.Printf("Error creating data directory: %v\n", err)
-		return err
-	}
-
-	// Open the file in append mode
-	f, err := os.OpenFile(dataFileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	dataDirName := filepath.Dir(absoluteDbFilePath)
+	err := os.MkdirAll(dataDirName, 0755)
 	if err != nil {
-		log.Printf("Error opening data file: %v\n", err)
-		return err
+		return fmt.Errorf("Error creating data directory: %v", err)
 	}
-	defer f.Close()
 
-	jsonData, err := json.Marshal(metrics)
+	// Open the database
+	dbConnection, err = sql.Open("sqlite3", absoluteDbFilePath)
 	if err != nil {
-		log.Printf("Error encoding metrics: %v\n", err)
-		return err
+		return fmt.Errorf("failed to open database: %v", err)
 	}
 
-	if _, err := f.Write(append(jsonData, '\n')); err != nil {
-		log.Printf("Error writing metrics: %v\n", err)
-		return err
+	// Create the table if it doesn't exist
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS metrics (
+		timestamp INTEGER,
+		network_name TEXT,
+		online INTEGER,
+		metrics TEXT
+	);
+	`
+	_, err = dbConnection.Exec(createTableSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create table: %v", err)
 	}
 
-	log.Printf("Saved metrics: %s\n", jsonData)
 	return nil
 }
 
-func getAllMetrics() ([]ConnectionMetrics, error) {
-	f, err := os.Open(dataFileName)
-	if err != nil {
-		log.Printf("Error opening data file: %v\n", err)
-		return nil, err
-	}
-	defer f.Close()
+func saveMetric(metrics *Metrics) error {
 
-	// Read all data from the file
-	var metrics []ConnectionMetrics
-	decoder := json.NewDecoder(f)
-	for decoder.More() {
-		var m ConnectionMetrics
-		if err = decoder.Decode(&m); err != nil {
-			log.Printf("Error decoding metrics: %v\n", err)
-			return nil, err
-		}
-		metrics = append(metrics, m)
+	// Marshal the metrics to JSON
+	metricsJson, err := json.Marshal(metrics.Data)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metrics: %v", err)
 	}
-	return metrics, nil
+
+	// Begin a transaction
+	tx, err := dbConnection.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %v", err)
+	}
+	defer tx.Rollback() // Rollback the transaction if it wasn't committed
+
+	// Prepare the SQL statement
+	stmt, err := tx.Prepare(`
+	INSERT INTO metrics(timestamp, network_name, online, metrics)
+	VALUES(?, ?, ?, ?)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to prepare statement: %v", err)
+	}
+	defer stmt.Close()
+
+	// Execute the statement
+	_, err = stmt.Exec(
+		metrics.Timestamp.UnixMilli(),
+		metrics.NetworkName,
+		metrics.Online,
+		metricsJson,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to execute statement: %v", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %v", err)
+	}
+
+	logger.Infof("Saved metrics")
+	return nil
+}
+
+func getAllMetrics() ([]Metrics, error) {
+	rows, err := dbConnection.Query(`
+		SELECT timestamp, network_name, online, metrics
+		FROM metrics
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query metrics: %v", err)
+	}
+	defer rows.Close()
+
+	var allMetrics []Metrics
+	for rows.Next() {
+		var timestampMillis int64
+		var networkName string
+		var onlineInt int
+		var metricsJson string
+
+		if err = rows.Scan(&timestampMillis, &networkName, &onlineInt, &metricsJson); err != nil {
+			logger.Errorf("failed to scan row: %v", err)
+		}
+
+		var metrics = Metrics{
+			Timestamp:   time.UnixMilli(timestampMillis),
+			NetworkName: networkName,
+			Online:      onlineInt != 0,
+		}
+
+		err = json.Unmarshal([]byte(metricsJson), &metrics.Data)
+		if err != nil {
+			logger.Errorf("failed to unmarshal metrics: %v", err)
+		} else {
+			allMetrics = append(allMetrics, metrics)
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error during rows iteration: %v", err)
+	}
+
+	return allMetrics, nil
 }

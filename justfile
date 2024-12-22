@@ -1,52 +1,57 @@
 # display this help message
+[group('info')]
 @help:
     echo "Usage: just <recipe-name>"
     echo ""
     just --list --unsorted
 
-# Build the program
+# build the binary
 [group('build')]
 build:
-    go build -o bin/netmon
+    go mod tidy
+    go mod vendor
+    # trim debug information from the binary
+    go build -ldflags="-s -w" -o bin/netmon
 
-# Clean up build artifacts
+# clean the binary
 [group('build')]
 clean:
     rm -f bin/netmon
 
-# Install the service
-[group('install')]
+# install and start the service
+[group('service')]
 @install:
-    mkdir -p log
-    bin/netmon --service install
+    pgrep -f bin/netmon > /dev/null && { echo "netmon is already running. try stop or uninstall"; exit 1; } || true
+    sudo bin/netmon --service install
+    sudo bin/netmon --service start
 
-# Uninstall the service
-[group('install')]
+# stop and uninstall the service
+[group('service')]
 @uninstall:
-    bin/netmon --service uninstall
+    sudo bin/netmon --service stop
+    sudo bin/netmon --service uninstall
 
-# Start the program in the background
-[group('run')]
+# start the program in the foreground
+[group('standalone')]
+@run *args:
+    pgrep -f bin/netmon > /dev/null && { echo "netmon is already running. try stop or uninstall"; exit 1; } || true
+    bin/netmon {{ args }} -interval 30s
+
+# start the program in the background
+[group('standalone')]
 @start *args:
+    pgrep -f bin/netmon > /dev/null && { echo "netmon is already running. try stop or uninstall"; exit 1; } || true
     mkdir -p log
-    nohup bin/netmon {{ args }} >> log/netmon.log && echo "netmon started" || echo "netmon failed to start. See netmon.log" &
+    nohup bin/netmon {{ args }} >> log/netmon.log 2>&1 & disown
+    sleep 1
+    pgrep -f bin/netmon > /dev/null && echo "netmon started" || echo "netmon failed to start. See netmon.log"
 
-# Stop the program
-[group('run')]
+# stop the program
+[group('standalone')]
 @stop:
-    pkill netmon && echo "netmon stopped" || echo "netmon is not running"
+    pgrep -f bin/netmon > /dev/null && { pkill -f bin/netmon && echo "netmon stopped" || echo "netmon failed to stop. try uninstall"; } || echo "netmon is not running"
 
-# View the status of the program
-[group('run')]
+# check the running status of the program (both service and standalone)
+[group('info')]
 @status:
-    ps aux | grep netmon | grep -v grep || echo "netmon is not running"
-
-# View the last 20 lines of the program logs
-[group('logs')]
-@logs:
-    tail -n 20 log/netmon.log 2>&1 | grep -v "No such file or directory" || echo "No logs found"
-
-# View the last 20 lines of the connection metrics log
-[group('logs')]
-@metrics:
-    tail -n 20 data/metrics.json 2>&1 | jq . 2>/dev/null || echo "No metrics found"
+    pgrep -f bin/netmon > /dev/null && echo "netmon is running" || echo "netmon is not running"
