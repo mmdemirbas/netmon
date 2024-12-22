@@ -5,7 +5,7 @@
     echo ""
     just --list --unsorted
 
-# build the binary
+# build the binary for the current platform
 [group('build')]
 build:
     go mod tidy
@@ -13,10 +13,21 @@ build:
     # trim debug information from the binary
     go build -ldflags="-s -w" -o bin/netmon
 
+# build for all major platforms
+[group('build')]
+build-all:
+    go mod tidy
+    go mod vendor
+    GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/netmon-linux-amd64
+    GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o bin/netmon-linux-arm64
+    GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o bin/netmon-darwin-amd64
+    GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/netmon-darwin-arm64
+    GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/netmon-windows-amd64.exe
+
 # clean the binary
 [group('build')]
 clean:
-    rm -f bin/netmon
+    rm -f bin/netmon*
 
 # install and start the service
 [group('service')]
