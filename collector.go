@@ -81,5 +81,9 @@ func collect() {
 		return
 	}
 
-	logger.Errorf("Error on speed test: %v", err)
+	if len(targets) == 0 {
+		logger.Warningf("no speedtest servers available")
+	} else {
+		logger.Errorf("all speedtest servers failed, last error: %v", err)
+	}
 }
