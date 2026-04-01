@@ -1,19 +1,25 @@
 package main
 
 import (
+	"context"
 	"github.com/showwin/speedtest-go/speedtest"
 	"time"
 )
 
-func startCollector(collectorInterval *time.Duration) *time.Ticker {
-	ticker := time.NewTicker(*collectorInterval)
+func startCollector(ctx context.Context, interval *time.Duration) {
+	ticker := time.NewTicker(*interval)
 	go func() {
+		defer ticker.Stop()
 		collect()
-		for range ticker.C {
-			collect()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				collect()
+			}
 		}
 	}()
-	return ticker
 }
 
 // collect performs a speed test, gets the network name, and saves the metrics.

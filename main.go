@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"github.com/kardianos/service"
 	"log"
@@ -9,8 +10,6 @@ import (
 	"slices"
 	"time"
 )
-
-// FIXME: Possible memory leak
 
 var (
 	absoluteDbFilePath string         // Absolute path to the database file
@@ -24,8 +23,6 @@ var (
 	serviceName        = "netmon"
 	serviceDescription = "Network Monitoring Service - github.com/mmdemirbas/netmon"
 )
-
-// TODO: Graceful shutdown collector
 
 func main() {
 	// Parse command-line flags
@@ -68,7 +65,8 @@ func main() {
 }
 
 type program struct {
-	exit chan struct{}
+	exit   chan struct{}
+	cancel context.CancelFunc
 }
 
 func initProgram() service.Service {
@@ -106,11 +104,13 @@ func initProgram() service.Service {
 }
 
 func (p *program) Start(_ service.Service) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
 	p.exit = make(chan struct{})
 
 	// Start should not block. Do the actual work async.
 	go func() {
-		err := p.run()
+		err := p.run(ctx)
 		if err != nil {
 			logger.Errorf("error running service: %v", err)
 			close(p.exit)
@@ -121,7 +121,7 @@ func (p *program) Start(_ service.Service) error {
 }
 
 // actual logic of the service
-func (p *program) run() error {
+func (p *program) run(ctx context.Context) error {
 	logger.Infof("===================================== Netmon =====================================")
 	logger.Infof("Starting netmon with the following settings:")
 	logger.Infof("  -db-file   = %s", absoluteDbFilePath)
@@ -135,16 +135,20 @@ func (p *program) run() error {
 	}
 
 	// Start data collection in a separate goroutine
-	ticker := startCollector(collectorInterval)
-	defer ticker.Stop()
+	startCollector(ctx, collectorInterval)
 
 	// Start the web server
 	return startHttpServer(serverPort)
 }
 
 func (p *program) Stop(_ service.Service) error {
-	// Any work in Stop should be quick, usually a few seconds at most.
 	logger.Info("I'm Stopping!")
+	if p.cancel != nil {
+		p.cancel()
+	}
+	if err := closeDatabase(); err != nil {
+		logger.Errorf("error closing database: %v", err)
+	}
 	close(p.exit)
 	return nil
 }

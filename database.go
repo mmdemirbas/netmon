@@ -52,6 +52,13 @@ func initDatabase(absoluteDbFilePath string) error {
 	return nil
 }
 
+func closeDatabase() error {
+	if dbConnection == nil {
+		return nil
+	}
+	return dbConnection.Close()
+}
+
 func saveMetric(metrics *Metrics) error {
 
 	// Marshal the metrics to JSON
