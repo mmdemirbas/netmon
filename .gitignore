@@ -1,11 +1,38 @@
-# App specific
-/bin
-/data
-/log
+# Build
+/bin/
+/build/
+/dist/
+/out/
 
 # Go
-/vendor
-/go.sum
+*.test
+*.out
+*.prof
+cover.out
 
-# Editors
-/.idea
+# Secrets
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.obsidian/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+*.err
+
+# Syncthing
+.stignore
+.stfolder
+
+# Project-specific
+/data
