@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"time"
 )
 
 // Embed the 'static' directory which contains the HTML and JS files
@@ -25,18 +26,21 @@ type MetricsDto struct {
 }
 
 func startHttpServer(serverPort *int) error {
-	// Create a sub filesystem for the 'static' directory
 	subFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
-		return fmt.Errorf("Failed to create sub filesystem: %v", err)
+		return fmt.Errorf("failed to create sub filesystem: %v", err)
 	}
 
-	// Set up the HTTP server
 	http.HandleFunc("/metrics", handleMetrics)
 	http.Handle("/", http.FileServer(http.FS(subFS)))
 
-	// Start the server with the specified port
-	return http.ListenAndServe(fmt.Sprintf(":%d", *serverPort), nil)
+	srv := &http.Server{
+		Addr:         fmt.Sprintf(":%d", *serverPort),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	return srv.ListenAndServe()
 }
 
 func handleMetrics(w http.ResponseWriter, _ *http.Request) {
