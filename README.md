@@ -22,47 +22,47 @@
    ```bash
    git clone https://github.com/mmdemirbas/netmon.git
    cd netmon
-   just build # OR: go build, if you like
+   task build
    ```
-  To see all available commands, run `just`.
+  To see all available commands, run `task --list`.
 
 ## Usage — Standalone
 
 1. Run the binary.
    ```bash
-   ./netmon
+   ./bin/netmon
    ```
 
 2. Open the web interface at [http://localhost:9898](http://localhost:9898).
 3. To stop, press `Ctrl+C`.
 
-- If you cloned the source code, you can also use the `just` commands:
+- If you cloned the source code, you can also use the task commands:
     ```bash
-    just run   # to run in foreground
-    just start # to run in background
-    just stop  # to stop
+    task run    # run in foreground
+    task start  # run in background
+    task stop   # stop
     ```
 
 ## Usage — System Service
 
 1. Install and start the service.
    ```bash
-   just install
+   task install
    ```
    or
    ```bash
-   sudo ./netmon -service install
-   sudo ./netmon -service start
+   sudo ./bin/netmon -service install
+   sudo ./bin/netmon -service start
    ```
 2. Open the web interface at [http://localhost:9898](http://localhost:9898).
 3. Stop and uninstall the service.
    ```bash
-    just uninstall
-    ```
+   task uninstall
+   ```
    or
-    ```bash
-   sudo ./netmon -service stop
-   sudo ./netmon -service uninstall
+   ```bash
+   sudo ./bin/netmon -service stop
+   sudo ./bin/netmon -service uninstall
    ```
 
 ## Configuration
@@ -72,56 +72,11 @@
 | `-db-file <path>` | Path to the SQLite database file.                           | `data/netmon.db` |
 | `-interval <s>`   | Interval between checks.                                    | `5m`             |
 | `-port <n>`       | Port for the web interface.                                 | `9898`           |
-| `-service <s>`    | Control servicel (`install`, `start`, `stop`, `uninstall`). |                  |
+| `-service <s>`    | Control service (`install`, `start`, `stop`, `uninstall`).  |                  |
 
 ## Contributing
 
-Contributions are welcome! For major changes, please open an issue first to discuss what you would
-like to change.
-
-### Pre-requisites
-
-- [Go](https://go.dev/)
-- [Just](https://just.systems)
-
-### Development
-
-Clone the repository.
-
-```bash
-git clone https://github.com/mmdemirbas/netmon.git
-cd netmon
-```
-
-Run `just` to see available commands.
-
-```bash
-Usage: just <recipe-name>
-
-Available recipes:
-    [info]
-    help        # display this help message
-    status      # check the running status of the program (both service and standalone)
-
-    [build]
-    build       # build the binary
-    clean       # clean the binary
-
-    [service]
-    install     # install and start the service
-    uninstall   # stop and uninstall the service
-
-    [standalone]
-    run *args   # start the program in the foreground
-    start *args # start the program in the background
-    stop        # stop the program
-```
-
-You can combine multiple commands to streamline the development cycle like this:
-
-```bash
-just stop clean build run
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Author
 
@@ -130,11 +85,11 @@ Muhammed Demirbaş - [GitHub](https://github.com/mmdemirbas)
 Thanks to the following open-source projects:
 
 - [Go](https://go.dev/)
-- [speedtest-go](https://showwin/speedtest-go)
+- [speedtest-go](https://github.com/showwin/speedtest-go)
 - [Chart.js](https://www.chartjs.org/)
 - [go-sqlite3](https://github.com/mattn/go-sqlite3)
 - [service](https://github.com/kardianos/service)
-- [justfile](https://just.systems)
+- [Task](https://taskfile.dev/)
 
 ## License
 

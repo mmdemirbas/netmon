@@ -1,0 +1,82 @@
+version: "3"
+
+vars:
+  BIN: bin
+  BINARY: "{{.BIN}}/netmon"
+
+tasks:
+  default:
+    desc: Build binary for current platform
+    cmds:
+      - task: build
+
+  build:
+    desc: Build binary for current platform
+    cmds:
+      - mkdir -p {{.BIN}}
+      - go build -ldflags="-s -w" -o {{.BINARY}}{{exeExt}} .
+
+  build-all:
+    desc: Cross-compile for macOS arm64/amd64, Windows, Linux
+    cmds:
+      - mkdir -p {{.BIN}}
+      - GOOS=darwin  GOARCH=arm64 go build -ldflags="-s -w" -o {{.BIN}}/netmon-darwin-arm64      .
+      - GOOS=darwin  GOARCH=amd64 go build -ldflags="-s -w" -o {{.BIN}}/netmon-darwin-amd64      .
+      - GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o {{.BIN}}/netmon-windows-amd64.exe .
+      - GOOS=linux   GOARCH=amd64 go build -ldflags="-s -w" -o {{.BIN}}/netmon-linux-amd64       .
+      - GOOS=linux   GOARCH=arm64 go build -ldflags="-s -w" -o {{.BIN}}/netmon-linux-arm64       .
+
+  test:
+    desc: Run Go tests
+    cmds:
+      - go test -race -v ./...
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  quality:
+    desc: Quality gate — tests with race+coverage, then lint
+    cmds:
+      - go test -race -coverprofile=cover.out ./...
+      - go tool cover -func=cover.out | tail -1
+      - golangci-lint run --output.tab.path stdout ./...
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf {{.BIN}}
+
+  run:
+    desc: Run in the foreground
+    cmds:
+      - "{{.BINARY}} -interval 30s"
+
+  start:
+    desc: Run in the background (logs to log/netmon.log)
+    cmds:
+      - mkdir -p log
+      - nohup {{.BINARY}} >> log/netmon.log 2>&1 & disown
+
+  stop:
+    desc: Stop the background process
+    cmds:
+      - sh -c 'pgrep -f bin/netmon > /dev/null && pkill -f bin/netmon && echo "netmon stopped" || echo "netmon is not running"'
+
+  status:
+    desc: Check if netmon is running
+    cmds:
+      - sh -c 'pgrep -f bin/netmon > /dev/null && echo "netmon is running" || echo "netmon is not running"'
+
+  install:
+    desc: Install and start as a system service (requires sudo)
+    cmds:
+      - sudo {{.BINARY}} -service install
+      - sudo {{.BINARY}} -service start
+
+  uninstall:
+    desc: Stop and uninstall the system service (requires sudo)
+    cmds:
+      - sudo {{.BINARY}} -service stop
+      - sudo {{.BINARY}} -service uninstall

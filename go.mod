@@ -1,6 +1,6 @@
-module netmon
+module github.com/mmdemirbas/netmon
 
-go 1.23.4
+go 1.26.1
 
 require (
 	github.com/kardianos/service v1.2.2

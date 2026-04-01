@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+// FIXME: Possible memory leak
+
 var (
 	absoluteDbFilePath string         // Absolute path to the database file
 	collectorInterval  *time.Duration // Interval between measurements
