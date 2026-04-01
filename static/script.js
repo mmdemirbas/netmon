@@ -65,13 +65,13 @@ function updateChart(chartTitle, chart, chartId, unit, labelsAndColors) {
     // Destroy existing chart if it exists
     if (chart) chart.destroy();
 
-    // Format time labels with better precision
+    const spansDays = data.length > 1 &&
+        (data[data.length - 1].EpochMillis - data[0].EpochMillis) > 86400000;
     const formatTime = (epochMillis) => {
         const date = new Date(epochMillis);
-        return date.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
+        const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (!spansDays) return time;
+        return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + time;
     };
 
     // Create datasets for metrics
