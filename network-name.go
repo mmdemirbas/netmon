@@ -7,52 +7,76 @@ import (
 	"strings"
 )
 
-// FIXME: This is not working in MacOS! Others are not tested yet! Fix it. Use a library.
-
 func getNetworkName() (string, error) {
-	if runtime.GOOS == "darwin" { // macOS
+	switch runtime.GOOS {
+	case "darwin":
 		return getNetworkNameMacOS()
-	} else if runtime.GOOS == "linux" { // Linux
+	case "linux":
 		return getNetworkNameLinux()
-	} else if runtime.GOOS == "windows" { // Windows
+	case "windows":
 		return getNetworkNameWindows()
+	default:
+		return "Unknown", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
-
-	return "Unknown", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 }
 
-// macOS: Use airport command
+// macOS: find the Wi-Fi interface via networksetup, then query its SSID.
 func getNetworkNameMacOS() (string, error) {
-	cmd := exec.Command("/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport", "-I")
-	output, err := cmd.Output()
+	iface, err := findWifiInterfaceMacOS()
+	if err != nil {
+		return "", err
+	}
+	if iface == "" {
+		return "Unknown", nil
+	}
+
+	out, err := exec.Command("/usr/sbin/networksetup", "-getairportnetwork", iface).Output()
 	if err != nil {
 		return "", err
 	}
 
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, " SSID:") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
-				return strings.TrimSpace(parts[1]), nil
+	// Output: "Current Wi-Fi Network: <SSID>" or
+	//         "You are not associated with an AirPort network.\n"
+	line := strings.TrimSpace(string(out))
+	ssid, found := strings.CutPrefix(line, "Current Wi-Fi Network: ")
+	if !found {
+		return "Unknown", nil
+	}
+	return ssid, nil
+}
+
+// findWifiInterfaceMacOS returns the BSD device name of the Wi-Fi adapter
+// (e.g. "en0") by parsing `networksetup -listallhardwareports`.
+func findWifiInterfaceMacOS() (string, error) {
+	out, err := exec.Command("/usr/sbin/networksetup", "-listallhardwareports").Output()
+	if err != nil {
+		return "", err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for i, line := range lines {
+		if strings.Contains(line, "Wi-Fi") || strings.Contains(line, "AirPort") {
+			for j := i + 1; j < len(lines); j++ {
+				if strings.HasPrefix(lines[j], "Device: ") {
+					return strings.TrimPrefix(lines[j], "Device: "), nil
+				}
+				if lines[j] == "" {
+					break
+				}
 			}
 		}
 	}
-
-	return "Unknown", nil
+	return "", nil
 }
 
-// Linux: Use iwconfig (if available)
+// Linux: use iwconfig if available.
 func getNetworkNameLinux() (string, error) {
-	cmd := exec.Command("iwconfig")
-	output, err := cmd.Output()
+	out, err := exec.Command("iwconfig").Output()
 	if err != nil {
-		// iwconfig might not be available, or the interface might not be Wi-Fi
-		return "Unknown", nil // Or return an error if you prefer
+		return "Unknown", nil
 	}
 
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		if strings.Contains(line, "ESSID:") {
 			parts := strings.Split(line, "\"")
 			if len(parts) > 1 {
@@ -60,27 +84,25 @@ func getNetworkNameLinux() (string, error) {
 			}
 		}
 	}
-
 	return "Unknown", nil
 }
 
-// Windows: Use netsh (very basic example, needs refinement)
+// Windows: use netsh to query the active Wi-Fi SSID.
 func getNetworkNameWindows() (string, error) {
-	cmd := exec.Command("netsh", "wlan", "show", "interfaces")
-	output, err := cmd.Output()
+	out, err := exec.Command("netsh", "wlan", "show", "interfaces").Output()
 	if err != nil {
 		return "", err
 	}
 
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "SSID") {
-			parts := strings.Split(line, ":")
-			if len(parts) > 1 {
+	for line := range strings.SplitSeq(string(out), "\n") {
+		// Match " SSID : value" but not "BSSID"
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "SSID") && !strings.HasPrefix(trimmed, "BSSID") {
+			parts := strings.SplitN(trimmed, ":", 2)
+			if len(parts) == 2 {
 				return strings.TrimSpace(parts[1]), nil
 			}
 		}
 	}
-
 	return "Unknown", nil
 }
