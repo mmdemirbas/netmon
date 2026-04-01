@@ -1,23 +1,28 @@
-let currentData = []; // Store the fetched data globally
-let selectedNetwork = 'All'; // Initially show all networks
+let currentData = [];
+let selectedNetwork = 'All';
+let selectedTimeRange = 86400000; // 24 h default
 
-// Store chart instances globally
 let latencyChart, packetLossChart, speedChart;
 
-// Add an event listener to the dropdown
 document.addEventListener('DOMContentLoaded', () => {
     fetchData();
-    setInterval(fetchData, 30000); // Auto-refresh
+    setInterval(fetchData, 30000);
 
-    const networkSelect = document.getElementById('networkSelect');
-    networkSelect.addEventListener('change', (event) => {
-        selectedNetwork = event.target.value;
+    document.getElementById('timeRangeSelect').addEventListener('change', (e) => {
+        selectedTimeRange = parseInt(e.target.value);
+        fetchData();
+    });
+
+    document.getElementById('networkSelect').addEventListener('change', (e) => {
+        selectedNetwork = e.target.value;
         updateCharts();
     });
 });
 
 async function fetchData() {
-    const response = await fetch('/metrics');
+    const since = selectedTimeRange === 0 ? 0 : Date.now() - selectedTimeRange;
+    const url = since === 0 ? '/metrics' : `/metrics?since=${since}`;
+    const response = await fetch(url);
     currentData = await response.json();
 
     populateNetworkDropdown();
