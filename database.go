@@ -24,9 +24,9 @@ type Metrics struct {
 func initDatabase(absoluteDbFilePath string) error {
 	// Create parent directories if they don't exist
 	dataDirName := filepath.Dir(absoluteDbFilePath)
-	err := os.MkdirAll(dataDirName, 0755)
+	err := os.MkdirAll(dataDirName, 0750)
 	if err != nil {
-		return fmt.Errorf("Error creating data directory: %v", err)
+		return fmt.Errorf("error creating data directory: %v", err)
 	}
 
 	// Open the database
@@ -65,7 +65,11 @@ func saveMetric(metrics *Metrics) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %v", err)
 	}
-	defer tx.Rollback() // Rollback the transaction if it wasn't committed
+	defer func() {
+		if rbErr := tx.Rollback(); rbErr != nil && rbErr != sql.ErrTxDone {
+			logger.Errorf("failed to rollback transaction: %v", rbErr)
+		}
+	}()
 
 	// Prepare the SQL statement
 	stmt, err := tx.Prepare(`
@@ -75,7 +79,11 @@ func saveMetric(metrics *Metrics) error {
 	if err != nil {
 		return fmt.Errorf("failed to prepare statement: %v", err)
 	}
-	defer stmt.Close()
+	defer func() {
+		if err := stmt.Close(); err != nil {
+			logger.Errorf("failed to close statement: %v", err)
+		}
+	}()
 
 	// Execute the statement
 	_, err = stmt.Exec(
@@ -104,7 +112,11 @@ func getAllMetrics() ([]Metrics, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query metrics: %v", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			logger.Errorf("failed to close rows: %v", err)
+		}
+	}()
 
 	var allMetrics []Metrics
 	for rows.Next() {
@@ -115,9 +127,10 @@ func getAllMetrics() ([]Metrics, error) {
 
 		if err = rows.Scan(&timestampMillis, &networkName, &onlineInt, &metricsJson); err != nil {
 			logger.Errorf("failed to scan row: %v", err)
+			continue
 		}
 
-		var metrics = Metrics{
+		metrics := Metrics{
 			Timestamp:   time.UnixMilli(timestampMillis),
 			NetworkName: networkName,
 			Online:      onlineInt != 0,
