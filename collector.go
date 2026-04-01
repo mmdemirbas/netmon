@@ -27,13 +27,9 @@ func collect() {
 
 	logger.Infof("Starting speed test on network: %s", networkName)
 
-	serverList, _ := speedtest.FetchServers()
-	targets, _ := serverList.FindServer([]int{})
-
-	// Assume offline initially
+	// Assume offline initially; set online=true only after a successful server test.
 	online := false
 	defer func() {
-		// If no server was tested, or any error occurred, the connection is considered offline
 		if !online {
 			metrics := &Metrics{
 				Timestamp:   time.Now(),
@@ -41,10 +37,21 @@ func collect() {
 				Online:      false,
 			}
 			if err = saveMetric(metrics); err != nil {
-				logger.Errorf("Error saving offline data: %v", err)
+				logger.Errorf("error saving offline metrics: %v", err)
 			}
 		}
 	}()
+
+	serverList, err := speedtest.FetchServers()
+	if err != nil {
+		logger.Errorf("failed to fetch speedtest servers: %v", err)
+		return
+	}
+	targets, err := serverList.FindServer([]int{})
+	if err != nil {
+		logger.Errorf("failed to find speedtest servers: %v", err)
+		return
+	}
 
 	for _, server := range targets {
 		err = server.TestAll()
