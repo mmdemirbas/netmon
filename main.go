@@ -138,7 +138,7 @@ func (p *program) run(ctx context.Context) error {
 	startCollector(ctx, collectorInterval)
 
 	// Start the web server
-	return startHttpServer(serverPort)
+	return startHttpServer(ctx, serverPort)
 }
 
 func (p *program) Stop(_ service.Service) error {

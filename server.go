@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -26,7 +27,7 @@ type MetricsDto struct {
 	UploadMbps           float64 `json:"UploadMbps"`
 }
 
-func startHttpServer(serverPort *int) error {
+func startHttpServer(ctx context.Context, serverPort *int) error {
 	subFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		return fmt.Errorf("failed to create sub filesystem: %v", err)
@@ -41,7 +42,23 @@ func startHttpServer(serverPort *int) error {
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
-	return srv.ListenAndServe()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	case err := <-serverErr:
+		return err
+	}
 }
 
 const defaultWindow = 24 * time.Hour
