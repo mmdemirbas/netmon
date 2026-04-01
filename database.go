@@ -35,18 +35,23 @@ func initDatabase(absoluteDbFilePath string) error {
 		return fmt.Errorf("failed to open database: %v", err)
 	}
 
-	// Create the table if it doesn't exist
-	createTableSQL := `
-	CREATE TABLE IF NOT EXISTS metrics (
-		timestamp INTEGER,
-		network_name TEXT,
-		online INTEGER,
-		metrics TEXT
-	);
-	`
-	_, err = dbConnection.Exec(createTableSQL)
+	_, err = dbConnection.Exec(`
+		CREATE TABLE IF NOT EXISTS metrics (
+			timestamp    INTEGER NOT NULL,
+			network_name TEXT    NOT NULL,
+			online       INTEGER NOT NULL,
+			metrics      TEXT    NOT NULL
+		)
+	`)
 	if err != nil {
 		return fmt.Errorf("failed to create table: %v", err)
+	}
+
+	_, err = dbConnection.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_metrics_timestamp ON metrics (timestamp)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create timestamp index: %v", err)
 	}
 
 	return nil
@@ -111,11 +116,13 @@ func saveMetric(metrics *Metrics) error {
 	return nil
 }
 
-func getAllMetrics() ([]Metrics, error) {
+func getMetricsSince(since time.Time) ([]Metrics, error) {
 	rows, err := dbConnection.Query(`
 		SELECT timestamp, network_name, online, metrics
 		FROM metrics
-	`)
+		WHERE timestamp >= ?
+		ORDER BY timestamp ASC
+	`, since.UnixMilli())
 	if err != nil {
 		return nil, fmt.Errorf("failed to query metrics: %v", err)
 	}

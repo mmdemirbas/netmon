@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -43,8 +44,20 @@ func startHttpServer(serverPort *int) error {
 	return srv.ListenAndServe()
 }
 
-func handleMetrics(w http.ResponseWriter, _ *http.Request) {
-	metrics, err := getAllMetrics()
+const defaultWindow = 24 * time.Hour
+
+func handleMetrics(w http.ResponseWriter, r *http.Request) {
+	since := time.Now().Add(-defaultWindow)
+	if s := r.URL.Query().Get("since"); s != "" {
+		ms, err := strconv.ParseInt(s, 10, 64)
+		if err != nil {
+			http.Error(w, "invalid since parameter", http.StatusBadRequest)
+			return
+		}
+		since = time.UnixMilli(ms)
+	}
+
+	metrics, err := getMetricsSince(since)
 	if err != nil {
 		logger.Errorf("Error loading data: %v", err)
 		http.Error(w, "Error loading data", http.StatusInternalServerError)
