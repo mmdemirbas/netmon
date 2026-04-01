@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/kardianos/service"
 	"log"
 	"os"
@@ -38,6 +37,9 @@ func main() {
 
 	var err error
 	absoluteDbFilePath, err = filepath.Abs(*dbFileName)
+	if err != nil {
+		log.Fatalf("failed to resolve absolute database path: %v", err)
+	}
 
 	// Initialize the service infra
 	svc := initProgram()
@@ -49,13 +51,13 @@ func main() {
 		if err == nil {
 			logger.Infof("Service %s succeeded", *svcFlag)
 			os.Exit(0)
-		} else if !slices.Contains(service.ControlAction[:], *svcFlag) {
-			logger.Errorf("Service %s failed: Valid actions are: %v", *svcFlag, service.ControlAction)
-			os.Exit(1)
+		}
+		if !slices.Contains(service.ControlAction[:], *svcFlag) {
+			logger.Errorf("Service %s failed: valid actions are: %v", *svcFlag, service.ControlAction)
 		} else {
 			logger.Errorf("Service %s failed: %v", *svcFlag, err)
-			os.Exit(1)
 		}
+		os.Exit(1)
 	}
 
 	// Run the service
@@ -104,19 +106,13 @@ func initProgram() service.Service {
 }
 
 func (p *program) Start(_ service.Service) error {
-	if service.Interactive() {
-		// Running in terminal
-	} else {
-		// Running as a service
-	}
-
 	p.exit = make(chan struct{})
 
 	// Start should not block. Do the actual work async.
 	go func() {
 		err := p.run()
 		if err != nil {
-			fmt.Errorf("Error running service: %v", err)
+			logger.Errorf("error running service: %v", err)
 			close(p.exit)
 		}
 	}()
